@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -67,7 +67,9 @@ c_poly_fill:
         movem.l (sp)+,d2-d7/a2-a6
         rts
 ; Textured spans (tex_poly): each row from its left to its right pixel.
-.tex:   lea tx_psurf(pc),a3
+.tex:   lea tx_loc+TL_ROW(pc),a3        ; tspan: another surface (TROW0)
+        move.w #TROW_NONE,(a3)
+        lea tx_psurf(pc),a3
 .trow:  move.w (a1),d0
         move.w hs_r-hs_l(a1),d1
         addq.l #2,a1
@@ -154,6 +156,8 @@ c_dither_fill:
         bsr crow
         lea hs_l(pc),a1
         lea (a1,d2.w*2),a1
+        lea tx_loc+TL_ROW(pc),a3
+        move.w #TROW_NONE,(a3)
         lea tx_psurf(pc),a3
 .trow:  move.w (a1),d0
         move.w hs_r-hs_l(a1),d1
@@ -248,6 +252,8 @@ c_pattern_fill:
         bsr crow
         lea hs_l(pc),a1
         lea (a1,d2.w*2),a1
+        lea tx_loc+TL_ROW(pc),a3
+        move.w #TROW_NONE,(a3)
         lea tx_psurf(pc),a3
 .krow:  move.w (a1),d0
         move.w hs_r-hs_l(a1),d1

@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -110,6 +110,15 @@ fill_checks:
         CHECKW F_BG_CHOICE+$38,$247c    ; movea.l #streams,a2
         CHECKW F_BG_CHOICE+$50,$13fc    ; the code after the background
         CHECKW F_LINES_TRACK+$42,$33c6  ; move.w d6,G_LINE_PREV
+        CHECKL F_PAT_A,$0c790000        ; cmpi.w #0,race_mode
+        CHECKL F_PAT_A+4,G_RACE_MODE
+        CHECKL F_PAT_A+8,$6700fe8e      ; beq.w shape_polys_track
+        CHECKW F_PAT_A+12,$600c         ; bra.s the pattern polygons
+        CHECKL F_PAT_B,$0c790002        ; cmpi.w #2,race_mode
+        CHECKL F_PAT_B+4,G_RACE_MODE
+        CHECKL F_PAT_B+8,$6600fe80      ; bne.w shape_polys_track
+        CHECKL F_PAT_BODY,$70007400     ; moveq #0,d0; moveq #0,d2
+        CHECKL F_POLYS_TRACK,$70007400
         CHECKL F_LINES_TRACK+$44,G_LINE_PREV
         CHECKW F_LINE_PAIRS+$12,$33c6
         CHECKL F_LINE_PAIRS+$14,G_LINE_PREV

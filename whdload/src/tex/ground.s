@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -20,7 +20,8 @@ tex_ground:
         lea tx_gnd(pc),a3
         tst.l TS_HS(a3)
         beq .done
-.again: lea gnd_list(pc),a4
+.again: TROW0 a0
+        lea gnd_list(pc),a4
         moveq #0,d3                     ; spans recorded
         moveq #0,d4                     ; their bytes above gnd_full
         movea.l G_DRAW_BACK,a2
@@ -99,6 +100,7 @@ gnd_flush:
         clr.w (a4)
         lea tx_loc+TL_MASK(pc),a4
         st (a4)
+        move.w #TROW_NONE,TL_ROW-TL_MASK(a4)    ; TROW0
         lea tx_gnd(pc),a3
         lea gnd_list(pc),a4
         subq.w #1,d3

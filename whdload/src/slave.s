@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -38,11 +38,11 @@ EXPMEM_SIZE     equ $70000          ; hunks 1, 0, 3, 5, 6 ($6B51C), then stack
         ifd INTERP
 OPTIONS         equ 1               ; the extras of the AGA view can be
                                     ; switched off (Custom2, keys)
-EXPMEM_EXTRA    equ $225000         ; chunky view 320 x 128 bytes, p2c table,
+EXPMEM_EXTRA    equ $265000         ; chunky view 320 x 128 bytes, p2c table,
                                     ; asphalt, wall, fence and grass textures, tables,
                                     ; fence list, ground colours, mask blit
                                     ; cache, c2p table, sky pairs, tree
-                                    ; leaves, crowd, materials (fill.s)
+                                    ; leaves, crowd, materials, seats (fill.s)
         else
 EXPMEM_EXTRA    equ $36000          ; chunky view 320 x 128 bytes, p2c table,
                                     ; mask blit cache (fill.s)
@@ -130,7 +130,7 @@ config: dc.b "C2:X:Original road and grass:0;"
         endif
 name:   dc.b "Indianapolis 500",0
 copy:   dc.b "1990 Papyrus / Electronic Arts",0
-info:   dc.b "Performance V1.0",10
+info:   dc.b "Performance V1.1",10
         dc.b "by Timo Heimonen",0
 disk_name:      dc.b "Disk.1",0
 settings_name:  dc.b "Settings",0
@@ -373,8 +373,8 @@ custom2:    dc.l 0
 OPT_N       equ 11
 opt_off:    dc.w 0                      ; groups switched off: bit 0 road,
                                         ; ground and grass textures, 1 wall
-                                        ; textures and fences, 2 trees, 3 crowd
-                                        ; and grandstand roofs, 4 buildings,
+                                        ; textures and fences, 2 trees, 3 crowd,
+                                        ; seats and grandstand roofs, 4 buildings,
                                         ; 5 guardrails and posts, 6 3D cars,
                                         ; 7 team liveries, 8 sky gradient,
                                         ; 9 sparks, 10 track in the mirrors

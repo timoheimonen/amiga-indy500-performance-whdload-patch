@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -96,7 +96,12 @@ tex_class:
         beq.s .drop
         moveq #15,d1
         and.b ctab(pc),d1
-        cmp.b #15,d1
+        btst #0,st_plain(pc)            ; a grandstand without its crowd:
+        beq.s .cl                       ; seats
+        bsr tex_seats
+        tst.b (a0)
+        bne.s .drop
+.cl:    cmp.b #15,d1
         beq.s .go
         cmp.b #5,d1
         beq.s .grs
@@ -255,11 +260,12 @@ poly_plane:
         neg.w d2
         neg.w d3
         neg.w d4
-.front: lea tx_n(pc),a2                 ; N for the texture plane
+.front: lea .front(pc),a2               ; N for the texture plane (tx_n is
+        adda.l #tx_n-.front,a2          ; beyond the reach of a word)
         move.w d2,(a2)+
         move.w d3,(a2)+
         move.w d4,(a2)
-        lea tx_up(pc),a2                ; D6 = N.up
+        lea tx_up-tx_n-4(a2),a2         ; D6 = N.up
         move.w (a2)+,d6
         muls.w d2,d6
         move.w (a2)+,d0

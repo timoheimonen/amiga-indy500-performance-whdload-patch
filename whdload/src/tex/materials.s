@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -56,6 +56,12 @@ FMR     set FMR+1
         dc.b 8,15
         dc.b 0,12,0,15,8,5,8,7,1,7,1,8,1,9,1,10 ; suites
         dc.b 1,11,8,9,13,7,13,8,13,9,13,11,15,8
+        dc.b 1,9,8,9,7,0,7,2,7,4,7,5,7,6,7,8 ; seats: colour 7 (texel
+        dc.b 7,9,7,10,7,11,7,12,7,13,7,14,7,15 ; ST_MEAN: the colour itself)
+        dc.b 0,9,0,15,8,0,8,2,8,4,8,5,8,6,8,8 ; colour 8
+        dc.b 8,9,8,10,8,11,8,12,8,13,8,14,8,15
+        dc.b 0,0,0,1,0,2,0,3,0,5,0,6,0,7,0,8 ; colour 0
+        dc.b 0,9,0,11,0,13,0,15,1,0,1,2,1,4
         even
 ; Rectangles of the atlases (FP_SIZE each), in order.
 FPH     macro                           ; atlas H: texel, u0, v0, w, h, pu, tu, pv, tv

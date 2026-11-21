@@ -1,5 +1,14 @@
 # Changelog
 
+## V1.1 21-11-2026
+
+- Rows of seats on the grandstands the game leaves without a crowd (all in
+  practice, some in qualifying), switched with the grandstands option.
+- 64-bit AGA bitplane fetches for the 3D view and a 4-plane view when all
+  options that use the extra colours are switched off.
+- Faster textured span set-up and paired chunky-to-planar stores, reducing
+  divisions, multiplications and chip bus waits.
+
 ## V1.0 15-11-2026
 
 First release.

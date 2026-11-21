@@ -1,10 +1,10 @@
-<!-- Indianapolis 500 WHDLoad Slave V1.0
+<!-- Indianapolis 500 WHDLoad Slave V1.1
 Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 Licensed under the MIT License. See the LICENSE file for details. -->
 
 # Indianapolis 500 Performance WHDLoad patch
 
-**Version 1.0.** Intended for emulator use (JIT, 68060) only.
+**Version 1.1.** Intended for emulator use (JIT, 68060) only.
 
 ![The start of a race](screenshots/06_race_start_field.png)
 
@@ -14,8 +14,8 @@ colours:
 
 - frames between the game's 15 simulation steps per second, so the view moves
   on every display frame while the driving model stays the original one;
-- textured road, grass, walls with fences, grandstands with a crowd, trees
-  and buildings, and a graded sky;
+- textured road, grass, walls with fences, grandstands with a crowd in a
+  race and rows of seats in practice, trees and buildings, and a graded sky;
 - 3D cars in team colours instead of the game's car images, sparks under
   them, and the track behind the car in the mirrors;
 - the game runs from a hard drive: its own intro and loader are unchanged,
@@ -28,7 +28,7 @@ start or while driving ([Graphics options](#graphics-options)).
 
 - An emulated Amiga with a 68060 and JIT, the AGA chipset, 2 MiB of Chip RAM
   and at least 4 MiB of Fast RAM. The game takes 512 KiB of Chip RAM and
-  about 2.6 MiB of other memory; WHDLoad and the OS need the rest.
+  about 2.9 MiB of other memory; WHDLoad and the OS need the rest.
 - Kickstart 3.1 and [WHDLoad](https://www.whdload.de/) 17 or later.
 - Python 3 to write the install; no other packages and no
   assembler.
@@ -92,8 +92,8 @@ sum of the values below), or with a key while the game runs.
 | 1024 | Original empty mirrors | M |
 
 The road and grass textures take the largest share of the drawing time, then
-the walls and fences and the 3D cars; the sky and the car colours cost
-nothing. The game's speed does not depend on the frame rate.
+the walls and fences, the grandstands and the 3D cars; the sky and the car
+colours cost nothing. The game's speed does not depend on the frame rate.
 
 ## Detail option
 

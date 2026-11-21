@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -95,6 +95,7 @@ tw_given:       dc.b 0                  ; tw_plane: corners in tx_wc (gr_seg)
 tx_wev:         ds.w 2                  ; flat: v axis (world x, y, 2.14)
 tx_fhtex:       dc.l 0                  ; materials: atlas H (R0) + 32768
 tx_fvtex:       dc.l 0                  ; atlas V (R0) + 32768
+tx_fstex:       dc.l 0                  ; seats (R0) + 32768
 tx_flut:        dc.l 0                  ; their tables, FM_NLUT x 256 bytes
 tx_fk:          dc.w 7                  ; tspan: the material's FM_KMAX
 fm_ext:         ds.l 2                  ; tex_face: u min, max (x 2^14)
