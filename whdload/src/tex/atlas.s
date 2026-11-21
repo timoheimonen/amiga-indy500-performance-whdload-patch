@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -18,6 +18,8 @@ fc_build:
         move.l d0,(a0)+                 ; H: the middle of R0
         add.l #$40000,d0
         move.l d0,(a0)+                 ; V
+        add.l #$40000,d0
+        move.l d0,(a0)+                 ; seats
         add.l #$40000-32768,d0
         move.l d0,(a0)                  ; tables
         movea.l tx_fhtex(pc),a0
@@ -39,6 +41,9 @@ fc_build:
         bsr .mips
         movea.l tx_fvtex(pc),a0
         bsr .mips
+        movea.l tx_fstex(pc),a0
+        bsr st_paint
+        bsr st_mips
         movea.l tx_flut(pc),a0
         lea fm_ramp(pc),a1
         moveq #FM_NLUT-1,d6

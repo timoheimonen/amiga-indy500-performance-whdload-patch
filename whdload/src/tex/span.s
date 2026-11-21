@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -7,7 +7,11 @@
         machine 68020
 
 ; A0 = first byte, D0 = x, D1 = pixels (1-320), D2 = view row, A3 =
-; surface. All registers kept. Pass 1: the fade k and u, v (x 2^p) at
+; surface. All registers kept. The caller runs TROW0 before the first
+; span of a surface (tspan keeps the row terms of the last span and
+; steps them to the next row, and the x terms of its first pixel; a
+; surface is rebuilt at the same address).
+; Pass 1: the fade k and u, v (x 2^p) at
 ; each chunk end (every 16 pixels and the span end) into tx_bnd, u and v
 ; only where a chunk next to it may be textured (TL_MASK: only the ends
 ; next to a chunk with markers); pass 2: each chunk textured, flat or as
@@ -19,26 +23,56 @@ tspan:
         movem.l d0-d7/a0-a6,-(sp)
         lea tx_loc(pc),a4
         ext.l d0
-        ext.l d2
         move.w d1,TL_LEFT(a4)
+        cmpa.l TL_RS(a4),a3             ; the row terms (x = 0): kept from
+        bne.s .rnew                     ; the span before on this row, one
+        move.w d2,d3                    ; step from those of the row above
+        sub.w TL_ROW(a4),d3             ; (the same bits: all sums are
+        beq.s .rt                       ; modulo 2^32), else multiplied
+        subq.w #1,d3
+        bne.s .rnew
+        move.l TS_GY(a3),d3
+        add.l d3,TL_RG(a4)
+        move.l TS_UY(a3),d3
+        add.l d3,TL_RU(a4)
+        move.l TS_VY(a3),d3
+        add.l d3,TL_RV(a4)
+        move.w d2,TL_ROW(a4)
+.rt:    cmp.w TL_X(a4),d0               ; the x terms: kept when the span
+        bne.s .xnew                     ; before of the surface began at
+        move.l TL_XG(a4),d5             ; this x (most often the row above)
+        move.l TL_XU(a4),d6
+        move.l TL_XV(a4),d7
+        bra.s .xset
+.rnew:  move.l a3,TL_RS(a4)
+        move.w d2,d4
+        ext.l d4
+        move.l TS_GY(a3),d3
+        muls.l d4,d3
+        add.l TS_GA(a3),d3
+        move.l d3,TL_RG(a4)
+        move.l TS_UY(a3),d3
+        muls.l d4,d3
+        add.l TS_UA(a3),d3
+        move.l d3,TL_RU(a4)
+        move.l TS_VY(a3),d3
+        muls.l d4,d3
+        add.l TS_VA(a3),d3
+        move.l d3,TL_RV(a4)
+        move.w d2,TL_ROW(a4)
+.xnew:  move.w d0,TL_X(a4)
         move.l TS_GX(a3),d5
         muls.l d0,d5
-        move.l TS_GY(a3),d3
-        muls.l d2,d3
-        add.l d3,d5
-        add.l TS_GA(a3),d5              ; G
+        move.l d5,TL_XG(a4)
         move.l TS_UX(a3),d6
         muls.l d0,d6
-        move.l TS_UY(a3),d3
-        muls.l d2,d3
-        add.l d3,d6
-        add.l TS_UA(a3),d6              ; D . u
+        move.l d6,TL_XU(a4)
         move.l TS_VX(a3),d7
         muls.l d0,d7
-        move.l TS_VY(a3),d3
-        muls.l d2,d3
-        add.l d3,d7
-        add.l TS_VA(a3),d7              ; D . v
+        move.l d7,TL_XV(a4)
+.xset:  add.l TL_RG(a4),d5              ; G
+        add.l TL_RU(a4),d6              ; D . u
+        add.l TL_RV(a4),d7              ; D . v
         tst.l TS_GX(a3)
         bne.s .steps
         tst.b TS_MESH(a3)
@@ -66,9 +100,6 @@ tspan:
         move.w d4,TL_HZ(a4)
         moveq #2,d3
 .kt:    move.w d3,TL_KT(a4)
-        moveq #32,d0
-        sub.w TS_FP(a3),d0
-        move.w d0,TL_C(a4)
         move.l TS_GX(a3),d0             ; steps for 16 pixels
         lsl.l #TCHS,d0
         movea.l d0,a1
@@ -114,7 +145,7 @@ tspan:
 .mbp:   moveq #2,d0
 .mbc:   move.w d0,10(a5)
         or.w -2(a5),d0                  ; and the chunk before
-        beq.s .mbs
+        beq .mbs
         BEND
 .mbs:   dbra d4,.madv
         move.w TL_N(a4),d0

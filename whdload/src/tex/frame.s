@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -104,7 +104,7 @@ opt_map:                                ; per group: tex_on and tex_on2 kept
         dc.b %11110110,15              ; asphalt and ground, grass
         dc.b %11111001,15              ; walls, fences
         dc.b %11101111,15              ; trees
-        dc.b %10011111,15              ; crowd, grandstand roofs
+        dc.b %10011111,15              ; crowd, seats, grandstand roofs
         dc.b %01111111,15              ; buildings
         dc.b $ff,%1100                  ; turn guardrails, posts
         dc.b $ff,%1011                  ; 3D cars

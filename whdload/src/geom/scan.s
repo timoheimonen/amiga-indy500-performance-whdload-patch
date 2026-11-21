@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -347,6 +347,7 @@ fscan:
 .ne:    movea.l a5,a4
         addq.l #4,a5
         dbra d7,.e
+        TROW0 a0
         move.w d2,d6                    ; spans
 .sp:    move.w (a1,d6.w*2),d0
         move.w (a2,d6.w*2),d1

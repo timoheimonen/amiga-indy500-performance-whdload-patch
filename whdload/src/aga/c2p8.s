@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -12,6 +12,19 @@
 ; y ^= t << s) for nibbles (s 4) and bytes (s 8) within each group of 4
 ; longs, C2P16 for words between the groups. The registers end as planes
 ; d4-d7 = 0-3, d0-d3 = 4-7 (bit 31 = the first pixel).
+;
+; A merge needs only its two longs to have passed the stages before it, so
+; the last merges are ordered to finish the planes two at a time (0 and 4,
+; 2 and 6, 1 and 5, 3 and 7) and each pair is stored when it is ready, with
+; the next merge between the pairs: a 68040 holds three unfinished writes,
+; and eight chip memory stores in a row would wait for the bus with
+; nothing else to run. Every plane is stored and still in D0-D7 at the
+; end of a block (the block after it may repeat it).
+;
+; For 4 planes (.four) only the high word of each Y is needed: its nibbles
+; are planes 0-3. The words of pixels 0-15 go to the high halves of d4-d7
+; and those of pixels 16-31 to the low halves; the nibble and byte stages
+; of the first group then leave d4-d7 = planes 0-3 at once.
 
 C2PY    macro                           ; \1 = Y of the next 4 pixels, \2 temp
         move.w (a0)+,\2
@@ -28,6 +41,12 @@ C2PM    macro                           ; \1 = y, \2 = x, \3 = s, \4 = m, \5 tem
         lsl.l #\3,\5
         eor.l \5,\1
         endm
+C2PW    macro                           ; \1.lo = Y.hi of the next 4 pixels
+        move.w (a0)+,d0
+        move.w (a2,d0.w*8),\1
+        move.w (a0)+,d0
+        or.w 4(a2,d0.w*8),\1
+        endm
 C2P16   macro                           ; \1 = \2.lo:\1.lo, \2 = \2.hi:\1.hi
         swap \1
         eor.w \1,\2
@@ -40,6 +59,18 @@ C2P16   macro                           ; \1 = \2.lo:\1.lo, \2 = \2.hi:\1.hi
 ; view rows of A1, bits 4-7 into its extra planes; marks the buffer. A
 ; block of 32 pixels equal to the one before it (sky rows, flat areas)
 ; stores the planes still in D0-D7 again.
+;
+; With every group that writes colours above 15 off (opt_cur bits 0-9: the
+; textures, the cars, the sky gradient and the sparks; the sky rows are
+; then all 16 r + 11, shown as colour 11) only planes 0-3 are made and the
+; buffer's copper list shows its view rows with 4 planes (AGA_CON0).
+C2P_FOUR equ $3ff
+C2PST4  macro                           ; planes 0-3 of a block, A1 to the next
+        move.l d5,FILL_PLANE(a1)
+        move.l d6,2*FILL_PLANE(a1)
+        move.l d7,3*FILL_PLANE(a1)
+        move.l d4,(a1)+
+        endm
 C2PST   macro                           ; planes of a block, A1/A3 to the next
         move.l d5,FILL_PLANE(a1)
         move.l d6,2*FILL_PLANE(a1)
@@ -59,11 +90,19 @@ c2p_view8:
         bmi .other
         lea aga_drawn(pc),a0
         st (a0,d1.w)
+        mulu #AGA_LIST,d1
+        movea.l #AGA_LISTS+AGA_CON0,a5
+        adda.l d1,a5                    ; A5: BPLCON0 of the view rows
         movea.l chunky_base(pc),a0
         lea VIEW_TOP(a1),a1
         movea.l a0,a4
         adda.l #VIEW_H*VIEW_W,a4
         movea.l c2p_t2(pc),a2
+        move.w opt_cur(pc),d0
+        not.w d0
+        andi.w #C2P_FOUR,d0
+        beq .four
+        move.w #$0210,(a5)
         bra.s .full                     ; the first block has no planes yet
 .blk:   movea.l a0,a6                   ; A5: the block before
         rept 8
@@ -92,19 +131,62 @@ c2p_view8:
         C2PM d1,d0,4,$0f0f0f0f,d7
         C2PM d3,d2,4,$0f0f0f0f,d7
         C2PM d2,d0,8,$00ff00ff,d7
+        C2P16 d0,d4                     ; planes 0 and 4 are ready: each
+        move.l d4,(a1)+                 ; pair stored at once (see above)
+        move.l d0,(a3)+
+        C2P16 d2,d6
+        move.l d6,2*FILL_PLANE-4(a1)
+        move.l d2,2*AGA_XPLANE-4(a3)
         C2PM d3,d1,8,$00ff00ff,d7
         move.l a6,d7
-        C2P16 d0,d4
         C2P16 d1,d5
-        C2P16 d2,d6
+        move.l d5,FILL_PLANE-4(a1)
+        move.l d1,AGA_XPLANE-4(a3)
         C2P16 d3,d7
-        C2PST
+        move.l d7,3*FILL_PLANE-4(a1)
+        move.l d3,3*AGA_XPLANE-4(a3)
         cmpa.l a4,a0
         bne .blk
 .done:  movem.l (sp)+,d0-d7/a0-a6
         rts
 .other: movem.l (sp)+,d0-d7/a0-a6
         bra c2p_view
+.four:  move.w #$4200,(a5)
+        bra.s .full4
+.blk4:  movea.l a0,a6
+        rept 8
+        cmpm.l (a5)+,(a6)+
+        bne.s .full4
+        endr
+        movea.l a6,a0
+        C2PST4
+        cmpa.l a4,a0
+        bne.s .blk4
+        bra .done
+.full4: movea.l a0,a5
+        C2PW d4
+        C2PW d5
+        C2PW d6
+        C2PW d7
+        swap d4
+        swap d5
+        swap d6
+        swap d7
+        C2PW d4
+        C2PW d5
+        C2PW d6
+        C2PW d7
+        C2PM d5,d4,4,$0f0f0f0f,d0
+        C2PM d7,d6,4,$0f0f0f0f,d0
+        C2PM d6,d4,8,$00ff00ff,d0
+        move.l d4,(a1)+
+        move.l d6,2*FILL_PLANE-4(a1)
+        C2PM d7,d5,8,$00ff00ff,d0
+        move.l d5,FILL_PLANE-4(a1)
+        move.l d7,3*FILL_PLANE-4(a1)
+        cmpa.l a4,a0
+        bne .blk4
+        bra .done
         machine 68000
 
 ; The c2p table at E + C2PT_OFF, in the order of the signed index (pixel a

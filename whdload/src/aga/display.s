@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -13,12 +13,27 @@
 ; Colours 0-15 stay the game's: the VBL handler and the fades write them,
 ; and colours 1-3 are copied from the game's list into the three lists at
 ; every VBL. Colours 16-255 repeat colours 0-15 (aga_palette).
+;
+; The three lists fetch the planes 64 bits at a time (FMODE 3): 6 fetch
+; units of 32 colour clocks per line with the game's DDFSTRT $38 and DDFSTOP
+; $D0, so 48 bytes a line and a modulo of -8. That leaves the chip bus free
+; for the processor during most of each line. The game's own lists expect
+; 16 bit fetches and never write FMODE or the modulos, so while the lists
+; exist a game list is entered through a prefix list that writes FMODE 0 and
+; the modulos 0 and jumps on with COP2LC (the game does not use COP2LC).
+; The prefixes rotate: the one a running copper may be in is never rewritten.
 
 AGA_CHIP        equ $28000          ; extra planes of BUF0, BUF1, BUF3
 AGA_XPLANE      equ VIEW_H*40       ; one extra plane (the view rows)
 AGA_XBUF        equ 4*AGA_XPLANE
 AGA_LISTS       equ AGA_CHIP+3*AGA_XBUF
-AGA_LIST        equ $60             ; bytes per copper list
+AGA_LIST        equ $70             ; bytes per copper list
+AGA_CON0        equ $3e             ; its BPLCON0 word of the view rows
+AGA_FMODE       equ 3               ; 64 bit plane fetches
+AGA_MOD         equ -8              ; 6 units of 8 bytes for 40
+AGA_PRES        equ AGA_LISTS+3*AGA_LIST    ; 4 prefix lists
+AGA_PRE         equ $20             ; bytes per prefix list
+AGA_PRE_LC      equ 14              ; its COP2LCH word (COP2LCL 4 further)
 AGA_ROW24       equ $44             ; beam line of row 24 (DIWSTRT $2C81)
 AGA_ROW148      equ $C0
 G_PALETTE       equ G+$C17222       ; colour count - 1, colours
@@ -27,6 +42,7 @@ F_VBL_COP1LC    equ G+$C13EEE       ; VBL handler: move.l d0,$dff080
 aga_hw:         dc.b 0              ; AGA display possible
 aga_on:         dc.b 0              ; lists built, in use
 aga_drawn:      ds.b 3              ; per buffer: view rows drawn as bytes
+aga_pre:        dc.b 0              ; prefix list written last
         even
 
 ; Extra planes of draw buffer A1. Returns A1 = its planes, D1 = its index
@@ -62,20 +78,34 @@ aga_drawn_clear:
         rts
 
 ; Writes COP1LC for the buffer in G_FRONT. D0: the game's copper list of
-; that buffer. All registers kept.
+; that buffer; with the lists built it is entered through the next prefix
+; list. All registers kept.
 aga_cop1lc:
         movem.l d0-d1/a1,-(sp)
         btst #0,aga_on(pc)
         beq.s .set
         movea.l G_FRONT,a1
         bsr aga_find
-        bmi.s .set
+        bmi.s .game
         lea aga_drawn(pc),a1
         tst.b (a1,d1.w)
-        beq.s .set
+        beq.s .game
         mulu #AGA_LIST,d1
         add.l #AGA_LISTS,d1
         move.l d1,d0
+        bra.s .set
+.game:  lea aga_pre(pc),a1
+        moveq #1,d1
+        add.b (a1),d1
+        andi.w #3,d1
+        move.b d1,(a1)
+        lsl.w #5,d1                     ; AGA_PRE
+        add.l #AGA_PRES,d1
+        movea.l d1,a1
+        move.w d0,AGA_PRE_LC+4(a1)
+        swap d0
+        move.w d0,AGA_PRE_LC(a1)
+        move.l a1,d0
 .set:   move.l d0,$dff080
         movem.l (sp)+,d0-d1/a1
         rts
@@ -420,6 +450,14 @@ aga_install:
         bsr tex_build
         bsr c2p_t2_build
         bsr sky_pt_build
+        lea st_ent_a(pc),a0             ; grandstands the game draws plain
+        move.w #$4eb9,F_PAT_A
+        move.l a0,F_PAT_A+2
+        move.w #$4e75,F_PAT_A+6
+        lea st_ent_b(pc),a0
+        move.w #$4eb9,F_PAT_B
+        move.l a0,F_PAT_B+2
+        move.w #$4e75,F_PAT_B+6
         lea fence_flush(pc),a0          ; fences before the cars
         move.w #$4eb9,F_VIEW_DONE
         move.l a0,F_VIEW_DONE+2
@@ -428,8 +466,8 @@ aga_install:
         rts
 
 ; At the first view drawn as bytes (or the first tb_activate): clears the
-; extra planes, builds the three lists and turns the AGA display on; the
-; next VBL writes colours 16-255.
+; extra planes, builds the three lists and the prefix lists and turns the
+; AGA display on; the next VBL writes colours 16-255.
 aga_build:
         movem.l d0-d4/a0-a2,-(sp)
         lea AGA_CHIP,a0
@@ -441,19 +479,33 @@ aga_build:
         moveq #2,d3
 .list:  move.l (a2)+,d0                 ; draw buffer
         move.w #$e0,d1
-        bsr.s .ptrs
+        bsr .ptrs
         move.l #$01820000,(a0)+
         move.l #$01840000,(a0)+
         move.l #$01860000,(a0)+
+        move.l #$01fc0000+AGA_FMODE,(a0)+
+        move.l #$01080000+(AGA_MOD&$ffff),(a0)+
+        move.l #$010a0000+(AGA_MOD&$ffff),(a0)+
         move.l #AGA_ROW24<<24|$01fffe,(a0)+
         move.l #$01000210,(a0)+         ; 8 planes
         move.l (a2)+,d0                 ; extra planes
         move.w #$f0,d1
-        bsr.s .ptrs
+        bsr .ptrs
         move.l #AGA_ROW148<<24|$01fffe,(a0)+
         move.l #$01004200,(a0)+         ; 4 planes
         move.l #$fffffffe,(a0)+
+        addq.l #4,a0                    ; AGA_LIST
         dbra d3,.list
+        moveq #3,d3                     ; the prefix lists (AGA_PRES)
+.pre:   move.l #$01fc0000,(a0)+
+        move.l #$01080000,(a0)+
+        move.l #$010a0000,(a0)+
+        move.l #$00840000,(a0)+         ; COP2LC: the game's list
+        move.l #$00860000,(a0)+
+        move.l #$008a0000,(a0)+         ; COPJMP2
+        move.l #$fffffffe,(a0)+
+        addq.l #4,a0                    ; AGA_PRE
+        dbra d3,.pre
         lea aga_dirty(pc),a0
         st (a0)
         lea aga_on(pc),a0

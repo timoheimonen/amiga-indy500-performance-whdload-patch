@@ -1,4 +1,4 @@
-; Indianapolis 500 WHDLoad Slave V1.0
+; Indianapolis 500 WHDLoad Slave V1.1
 ; Copyright (c) 2026 Timo Heimonen <timo.heimonen@proton.me>
 ; Licensed under the MIT License. See the LICENSE file for details.
 ;
@@ -34,9 +34,9 @@ TTREE_OFF       equ EXPMEM_SIZE+$14A000 ; tree leaves: 32 KB of holes, 4 x 128 x
                                     ; in 256 x 256 bytes, 256 bytes of holes
 TCROWD_OFF      equ EXPMEM_SIZE+$163000 ; crowd: 4 levels of 256 x 256 bytes, 3
                                     ; tables of 256 bytes
-TFACE_OFF       equ EXPMEM_SIZE+$1A4000 ; scenery materials: atlases H and V, 4
-                                    ; levels of 256 x 256 bytes each, then
-                                    ; FM_NLUT tables of 256 bytes
+TFACE_OFF       equ EXPMEM_SIZE+$1A4000 ; scenery materials: atlases H and V and
+                                    ; the seats, 4 levels of 256 x 256 bytes
+                                    ; each, then FM_NLUT tables of 256 bytes
 FM_COL          equ 0               ; fm_tab: byte: the game's colour
 FM_BIT          equ 1               ; byte: its tex_on bit
 FM_FLG          equ 2               ; byte: FMF_*
@@ -53,7 +53,16 @@ FM_SIZE         equ 28
 FMF_FLAT        equ 1               ; flat (a roof), else vertical
 FMF_ZMIN        equ 2               ; v origin at the polygon's lowest z
 FMF_V           equ 4               ; atlas V, else H
-FM_NLUT         equ 6
+FM_NLUT         equ 9
+ST_LUT          equ 6               ; seats: the tables of colours 7, 8 and 0
+ST_MEAN         equ 9               ; texel of the far, flat seats
+ST_KMAX         equ 6               ; flat from this k on (256 units a pixel, or far)
+ST_DARK         equ 1               ; seat texels: portal
+ST_WALK         equ 4               ; walkway
+ST_STAIR        equ 5               ; aisle
+ST_SHADE        equ 8               ; row under a bench (tone -1 to +1)
+ST_BENCH        equ 12              ; bench row
+ST_WALL         equ 14              ; wall above a walkway
 FM_PNUM         equ 12              ; pylon: texel of the positions
 FM_CNUM         equ 14              ; and of the car numbers
 FP_ATL          equ 0               ; fm_paint: byte: atlas (0 H, 1 V; -1 end)
@@ -83,6 +92,11 @@ GR_KFAR         equ 3               ; posts below this k, beams to k 6
 TX_GMIN         equ 1024            ; G x 65536 below this: flat (far)
 G_CAM_POS       equ G+$C13A26       ; view_cam_pos: x, y, z
 G_SHAPE_BASE    equ G+$C1CA78       ; shape_base (A4 of the scene code)
+G_RACE_MODE     equ G+$C093E0       ; race_mode: 0 practice, 1 qualifying, 2 race
+F_POLYS_TRACK   equ G+$C1D188       ; shape_polys_track: moveq #0,d0; moveq #0,d2
+F_PAT_A         equ G+$C1D2F0       ; shape_polys_pattern: cmpi.w #0,race_mode
+F_PAT_B         equ G+$C1D2FE       ; its second entry: cmpi.w #2,race_mode
+F_PAT_BODY      equ G+$C1D30A       ; the pattern polygons: moveq #0,d0; moveq #0,d2
 G_COORD_POOL    equ G+$C0471A       ; coord_pool (A5)
 TRACK_VTX_REL   equ $C230CA-$C1CA78 ; track_vertices from shape_base
 TRACK_VTX_N     equ 2282
@@ -110,7 +124,7 @@ TS_SIZE equ 64
 
 TCH     equ 16                      ; tspan: pixels per chunk (dG/dx not 0); 32
 TCHS    equ 4                       ; was 1-6 % faster but coarsened the fence
-TL_C    equ 0                       ; tspan, word: 32 - TS_FP (pass 1)
+TL_ROW  equ 0                       ; tspan, word: view row of TL_RG-TL_RV
 TL_LEFT equ 2                       ; word: pixels left
 TL_KT   equ 4                       ; word: k from which u and v are unused
 TL_HZ   equ 6                       ; word: haze: first pixel of each chunk
@@ -118,10 +132,26 @@ TL_N    equ 8                       ; word: pixels of a last, shorter chunk
 TL_MASK equ 10                      ; byte: set: only where the ground markers are
 TL_U16  equ 14                      ; long: u step per 16 pixels (row path)
 TL_V16  equ 18                      ; long: v step
-TL_SIZE equ 22
+TL_RG   equ 22                      ; longs: G, D . u and D . v at x = 0 of
+TL_RU   equ 26                      ; row TL_ROW of the surface TL_RS
+TL_RV   equ 30
+TL_RS   equ 34                      ; long: that surface
+TL_X    equ 38                      ; word: x of TL_XG-TL_XV
+TL_XG   equ 40                      ; longs: x times TS_GX, TS_UX and TS_VX
+TL_XU   equ 44                      ; of the surface TL_RS (set whenever
+TL_XV   equ 48                      ; the row terms are multiplied)
+TL_SIZE equ 52
+TROW_NONE equ $8000                 ; TL_ROW: no row (TROW0)
 TB_SIZE equ 12                      ; tx_bnd entry: u, v (longs), k, class (words)
 GND_MARK equ $11                    ; colour 16 + 1: the drawing never writes it
 
+; Before the first tspan of a surface, and after any change to one: the
+; row terms tspan kept are not of this surface. \1 = an address register,
+; lost.
+TROW0   macro
+        lea tx_loc+TL_ROW(pc),\1
+        move.w #TROW_NONE,(\1)
+        endm
 ; Pass 2 of tspan: u, v, their steps and the jump into the pixel code for
 ; a chunk of D7 pixels from its two tx_bnd entries at A5. Leaves D0 =
 ; (16 - n) x 16, D2 = 16 - n. The pixel code keeps the u integer byte in
@@ -132,15 +162,32 @@ GND_MARK equ $11                    ; colour 16 + 1: the drawing never writes it
 ; and a chunk has at most 16 pixels.
 TUV     macro
         move.w TS_P(a3),d1
-        move.l TB_SIZE(a5),d5           ; per pixel, 8.8 texels
-        sub.l (a5),d5
-        asr.l d1,d5
-        divs.l d7,d5
+        move.l TB_SIZE(a5),d5           ; per pixel, 8.8 texels: the low
+        sub.l (a5),d5                   ; word of the difference / D7,
+        asr.l d1,d5                     ; truncated
         move.l TB_SIZE+4(a5),d6
         sub.l 4(a5),d6
         asr.l d1,d6
+        cmp.w #TCH,d7
+        bne.s .s\@
+        tst.l d5                        ; a whole chunk: shifts
+        bpl.s .u\@
+        moveq #TCH-1,d0
+        add.l d0,d5
+.u\@:   asr.l #TCHS,d5
+        tst.l d6
+        bpl.s .v\@
+        moveq #TCH-1,d0
+        add.l d0,d6
+.v\@:   asr.l #TCHS,d6
+        bra.s .d\@
+.s\@:   divs.w d7,d5                    ; shorter: a word quotient; when it
+        bvc.s .w\@                      ; does not fit (D5 is kept) the long
+        divs.l d7,d5                    ; divide
+.w\@:   divs.w d7,d6
+        bvc.s .d\@
         divs.l d7,d6
-        move.l (a5),d3                  ; start, 8.8 texels (low word)
+.d\@:   move.l (a5),d3                  ; start, 8.8 texels (low word)
         lsr.l d1,d3
         move.l 4(a5),d4
         lsr.l d1,d4
@@ -187,10 +234,20 @@ BEND    macro
         mulu.w d2,d2
         lsr.l #8,d2
         lsr.l #4,d2
-        divu.l d2,d1                    ; f x 2^p
-        bfffo d1{0:32},d2               ; k: bits of f x 2^p >> TS_FP
-        move.w TL_C(a4),d3
-        sub.w d2,d3
+        bfffo d2{0:32},d3               ; k: bits of f x 2^p >> TS_FP, f x
+        lsl.l d3,d2                     ; 2^p = D1 / D2 (D2 not 0). The bits
+        move.w d3,8(a5)                 ; of the quotient without the divide:
+        bfffo d1{0:32},d3               ; both shifted up to bit 31, the
+        lsl.l d3,d1                     ; difference of the shifts, one more
+        sub.w 8(a5),d3                  ; when the shifted D1 is not below
+        neg.w d3                        ; the shifted D2
+        sub.l d2,d1
+        moveq #0,d2
+        subx.w d2,d3
+        addq.w #1,d3
+        bpl.s .q\@
+        moveq #0,d3                     ; a quotient of 0
+.q\@:   sub.w TS_FP(a3),d3
         cmp.w #7,d3
         bls.s .k\@
         spl d3                          ; below 0: 0, above 7: 7
